@@ -1,9 +1,63 @@
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import {
+  ensureSeeded,
+  readDepthAnalyses,
+  readHeatSchemes,
+  submitIncrementalUpdate,
+} from '@/domain/heat-scroll/service'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
 const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
+
+/**
+ * 跨模块更新钩子（调用链：热力分析 / 浏览深度 -> 页面热力浏览联合数据报告）。
+ *
+ * - 热力分析(heatmap)动作：联合报告只更新热力方案快照，深度曲线整条沿用原版本。
+ * - 浏览深度(scrollmap)动作：联合报告只重算受影响页面的浏览深度曲线，
+ *   热力方案沿用原版本；并发动作只有第一个凭据能提交，其余收到拒绝凭据。
+ * 纯前端本地链路里没有真实页面/设备字段，故默认按模块全量页面增量重算，
+ * 合并仍按页面/设备做未知与零值区分，未变化设备/页面不会产生覆盖。
+ */
+function notifyJointDomain(moduleKey: string, rowId: number, credential: string): ActionResult | null {
+  try {
+    ensureSeeded()
+    if (moduleKey === 'scrollmap') {
+      const result = submitIncrementalUpdate({
+        credential,
+        source: 'scrollmap',
+        page: null,
+        heatSchemes: readHeatSchemes(),
+        depthAnalyses: readDepthAnalyses(),
+      })
+      if (!result.ok) {
+        return { ok: false, message: result.message }
+      }
+      return null
+    }
+    if (moduleKey === 'heatmap') {
+      const result = submitIncrementalUpdate({
+        credential,
+        source: 'heatmap',
+        page: null,
+        heatSchemes: readHeatSchemes(),
+        depthAnalyses: readDepthAnalyses(),
+      })
+      if (!result.ok) {
+        return { ok: false, message: result.message }
+      }
+      return null
+    }
+    return null
+  } catch (error) {
+    // 联合域是派生报告，不能因为它失败而阻断主模块的状态流转。
+    return {
+      ok: false,
+      message: error instanceof Error ? `联合报告联动失败：${error.message}` : '联合报告联动失败',
+    }
+  }
+}
 
 export function moduleMeta(key: string): ModuleMeta {
   const meta = MODULE_BY_KEY.get(key)
@@ -53,6 +107,12 @@ export function runAction(key: string, id: number, action: string): ActionResult
   const next = [...rows]
   next[index] = updated
   saveRows(key, next)
+  // 跨模块联动：浏览深度/热力分析的状态动作驱动联合报告增量重算。
+  const credential = `${key}-${id}-${action}-${Date.now()}`
+  const jointFeedback = notifyJointDomain(key, id, credential)
+  if (jointFeedback && !jointFeedback.ok) {
+    return { ok: false, message: `${meta.entity}已${action}，当前状态「${target}」；但${jointFeedback.message}` }
+  }
   return { ok: true, message: `${meta.entity}已${action}，当前状态「${target}」` }
 }
 

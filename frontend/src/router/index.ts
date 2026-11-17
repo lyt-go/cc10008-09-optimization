@@ -14,6 +14,7 @@ const Anomaly = () => import('@/views/anomaly/index.vue')
 const Cohortcmp = () => import('@/views/cohortcmp/index.vue')
 const Funnel = () => import('@/views/funnel/index.vue')
 const Scrollmap = () => import('@/views/scrollmap/index.vue')
+const HeatScroll = () => import('@/views/heat-scroll/index.vue')
 const Formfield = () => import('@/views/formfield/index.vue')
 const Clickstream = () => import('@/views/clickstream/index.vue')
 const Retention = () => import('@/views/retention/index.vue')
@@ -37,6 +38,7 @@ const router = createRouter({
     { path: '/cohortcmp', name: 'cohortcmp', component: Cohortcmp },
     { path: '/funnel', name: 'funnel', component: Funnel },
     { path: '/scrollmap', name: 'scrollmap', component: Scrollmap },
+    { path: '/heat-scroll', name: 'heat-scroll', component: HeatScroll },
     { path: '/formfield', name: 'formfield', component: Formfield },
     { path: '/clickstream', name: 'clickstream', component: Clickstream },
     { path: '/retention', name: 'retention', component: Retention },

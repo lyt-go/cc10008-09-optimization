@@ -70,5 +70,23 @@ npm run build
 - 状态流转只允许在 `local-service.ts` 里改，页面组件不做业务判断。
 - 想回到初始数据：清掉浏览器里 `behavior-event-trace-hub:entries` 这一项，或调用 `resetModule(模块)`。
 
+## 页面热力浏览联合数据报告（heat-scroll 联合域）
+
+热力分析（热力方案）与浏览深度（深度分析）合并出的增量联合报告，独立成域放在
+`frontend/src/domain/heat-scroll/`，页面入口为侧边栏「页面热力浏览联合报告」（路由 `/heat-scroll`）。
+
+- `types.ts`：联合报告领域模型。深度分段统一为 `number | null`，`null` 表示**未知/缺采**，
+  数字 `0` 是**实测零值**；关键内容曝光率带 `measured | unknown` 标记，两者严格区分。
+- `merge.ts`：纯函数合并。按原始输入的字段存在性判断——字段缺省复用旧版本值，
+  显式 `null` 覆盖为未知，数字（含 0）采用实测值，任何路径都不会把未知补成 0。
+- `service.ts`：增量重算、凭据并发锁、版本冲突仲裁（未知覆盖保留 / 缺失段延后发布）、
+  归档与暂存、分段移除/补回。每个页面同一时刻只有一份现行报告，历史版本整份归档并保留未知标记。
+- `store.ts` / `seed.ts`：独立 localStorage key（`behavior-event-trace-hub:heat-scroll-joint`）
+  的持久化与结构化源数据。
+- 调用链：`local-service.runAction` 在 `heatmap` / `scrollmap` 动作后经 `notifyJointDomain`
+  触发联合域增量重算；落在浏览深度的更新只改受影响页面的深度曲线，热力方案沿用原版本。
+- 验证：`make -C verify verify`，覆盖未知/零值区分、单次覆盖、并发拒绝凭据、跨模块局部更新、
+  两种仲裁策略与「移除二屏→未知→补回仅该设备变化」共 18 项断言。
+
 领域：数据工程
 子方向：数据分析与数据应用
